@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>eFootball League</title>
+
+<!-- Montserrat Medium font -->
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500&display=swap" rel="stylesheet">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+<style>
+body{
+  font-family: 'Montserrat', sans-serif;
+  font-weight:500;
+  margin:0;
+  padding:20px;
+  background-image: url('https://png.pngtree.com/background/20250102/original/pngtree-soccer-field-and-spotlight-background-in-the-stadium-picture-image_16093827.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+  color:#fff;
+  min-height:100vh;
+}
+body::before{
+  content:"";
+  position:absolute;
+  top:0; left:0; right:0; bottom:0;
+  background: rgba(0,0,0,0.8);
+  z-index:0;
+}
+
+.container{max-width:1100px;margin:auto; position: relative; z-index:1;}
+h1{text-align:center;color:#facc15;}
+
+.card{
+  background:rgba(17,42,69,0.85);
+  padding:15px;
+  margin-bottom:15px;
+  border-radius:10px;
+}
+
+input,textarea,button{
+  padding:8px;
+  width:100%;
+  margin-top:6px;
+}
+
+button{
+  background:#c8102e;
+  color:white;
+  border:none;
+  border-radius:6px;
+  cursor:pointer;
+}
+button:hover{opacity:0.9;}
+
+.round{
+  border:1px solid #334155;
+  margin-bottom:12px;
+  padding:10px;
+  border-radius:8px;
+}
+
+.fixture, .match-entry{
+  background:rgba(0,0,0,0.5);
+  padding:10px;
+  border-radius:8px;
+  margin-bottom:12px;
+  font-size:18px;
+  color:#fff;
+  display:flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.fixture-player, .match-player{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin:4px 0;
+}
+
+.fixture-player img, .match-player img{
+  width:50px;
+  height:50px;
+  object-fit: cover;
+  border-radius:5px;
+}
+
+.player-img{
+  width:40px;
+  height:40px;
+  object-fit: cover;
+  border-radius:5px;
+  margin-right:10px;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  table-layout: fixed;
+}
+th,td{
+  border:1px solid #334155;
+  padding:8px;
+  text-align:center;
+  vertical-align: middle;
+}
+th{background:#c8102e;}
+.rank1{background:#14532d;font-weight:bold;}
+.player-cell{
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  gap:10px;
+}
+.player-cell img{
+  width:40px;
+  height:40px;
+  object-fit: cover;
+  border-radius:5px;
+}
+.score-inputs{
+  display:flex;
+  align-items:center;
+  gap:5px;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h1>eFootball League Manager</h1>
+
+<div class="card">
+  <button onclick="newTournament()">New Tournament</button>
+</div>
+
+<div class="card">
+<h3>Add Player (Single)</h3>
+<input id="singlePlayer">
+<input type="file" id="singlePlayerImg" accept="image/*">
+<button onclick="addSingle()">Add Player</button>
+</div>
+
+<div class="card">
+<h3>Add Players (Bulk)</h3>
+<textarea id="bulkPlayers" rows="4"></textarea>
+<button onclick="addBulk()">Add All</button>
+</div>
+
+<div class="card">
+<button onclick="generateLeague()">Generate League Schedule</button>
+</div>
+
+<div class="card" id="fixturesCard">
+<h2>Official Match Fixtures</h2>
+<div id="fixtures"></div>
+<div style="display:flex; gap:10px; margin-top:10px;">
+  <button onclick="downloadPNG()">Download PNG</button>
+  <button onclick="downloadSVG()">Download SVG</button>
+</div>
+</div>
+
+<div class="card">
+<h2>Matchday – Score Entry</h2>
+<div id="rounds"></div>
+</div>
+
+<div class="card">
+<h2>eFootball Standings</h2>
+<table>
+<thead>
+<tr>
+<th>Rank</th><th>Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>Pts</th>
+</tr>
+</thead>
+<tbody id="table"></tbody>
+</table>
+</div>
+
+</div>
+
+<script>
+let players=[], stats={}, rounds=[], playerImgs={};
+
+function addSingle(){
+ let n=singlePlayer.value.trim();
+ if(!n||players.includes(n)) return;
+
+ let fileInput=document.getElementById('singlePlayerImg');
+ let imgURL=null;
+ if(fileInput.files && fileInput.files[0]){
+   imgURL=URL.createObjectURL(fileInput.files[0]);
+ }
+
+ players.push(n);
+ stats[n]={p:0,w:0,d:0,l:0,pts:0};
+ playerImgs[n]=imgURL; 
+ singlePlayer.value="";
+ fileInput.value="";
+ updateTable();
+}
+
+function addBulk(){
+ bulkPlayers.value.split("\n").forEach(n=>{
+  n=n.trim();
+  if(n && !players.includes(n)){
+    players.push(n);
+    stats[n]={p:0,w:0,d:0,l:0,pts:0};
+    playerImgs[n]=null;
+  }
+ });
+ bulkPlayers.value="";
+ updateTable();
+}
+
+function generateLeague(){
+ rounds=[];
+ document.getElementById("rounds").innerHTML="";
+ document.getElementById("fixtures").innerHTML="";
+ resetStats();
+
+ let list=[...players];
+ if(list.length%2!==0) list.push("BYE");
+
+ let n=list.length, half=n/2;
+ let totalRounds=(n-1)*2;
+ let temp=[...list];
+
+ for(let r=0;r<totalRounds;r++){
+  let round=[];
+  for(let i=0;i<half;i++){
+   let a=temp[i], b=temp[n-1-i];
+   if(a!=="BYE" && b!=="BYE")
+    round.push({a,b,sa:null,sb:null});
+  }
+
+  // Shuffle matches in round
+  for (let i = round.length - 1; i > 0; i--) {
+      let j = Math.floor(Math.random() * (i + 1));
+      [round[i], round[j]] = [round[j], round[i]];
+  }
+
+  rounds.push(round);
+  temp.splice(1,0,temp.pop());
+ }
+
+ renderFixtures();
+ renderRounds();
+}
+
+function resetStats(){
+ players.forEach(p=>stats[p]={p:0,w:0,d:0,l:0,pts:0});
+ updateTable();
+}
+
+function renderFixtures(){
+ let box=document.getElementById("fixtures");
+ rounds.forEach((r,i)=>{
+  let div=document.createElement("div");
+  div.className="round";
+  div.innerHTML=<h3 style="color:white">Round ${i+1}</h3>;
+  r.forEach(m=>{
+   let f=document.createElement("div");
+   f.className="fixture";
+
+   f.innerHTML=`
+     <div style="display:flex; flex-direction:column; gap:10px;">
+       <div class="fixture-player">
+         ${playerImgs[m.a]?<img src="${playerImgs[m.a]}"/>:""} 
+         <span>${m.a}</span>
+       </div>
+       <div class="fixture-player">
+         ${playerImgs[m.b]?<img src="${playerImgs[m.b]}"/>:""} 
+         <span>${m.b}</span>
+       </div>
+     </div>
+   `;
+   div.appendChild(f);
+  });
+  box.appendChild(div);
+ });
+}
+
+function renderRounds(){
+ let box=document.getElementById("rounds");
+ rounds.forEach((r,ri)=>{
+  let div=document.createElement("div");
+  div.className="round";
+  div.innerHTML=<h3>Round ${ri+1}</h3>;
+  r.forEach((m,mi)=>{
+   let row=document.createElement("div");
+   row.className="match-entry";
+   row.style.display="flex";
+   row.style.alignItems="center";
+   row.style.gap="10px";
+
+   row.innerHTML=`
+    <div class="player-cell">
+      ${playerImgs[m.a]?<img class="player-img" src="${playerImgs[m.a]}"/>:""} <span>${m.a}</span>
+    </div>
+    <div class="score-inputs">
+      <input type="number" id="a${ri}${mi}" style="width:50px;"> - 
+      <input type="number" id="b${ri}${mi}" style="width:50px;">
+    </div>
+    <div class="player-cell">
+      ${playerImgs[m.b]?<img class="player-img" src="${playerImgs[m.b]}"/>:""} <span>${m.b}</span>
+    </div>
+    <button onclick="save(${ri},${mi})">Save</button>
+   `;
+   div.appendChild(row);
+  });
+  box.appendChild(div);
+ });
+}
+
+function save(r,m){
+ let match=rounds[r][m];
+ let a=parseInt(document.getElementById(a${r}${m}).value);
+ let b=parseInt(document.getElementById(b${r}${m}).value);
+ if(isNaN(a)||isNaN(b))return;
+
+ if(match.sa!==null) undo(match);
+ match.sa=a; match.sb=b;
+ apply(match);
+ updateTable();
+}
+
+function apply(m){
+ stats[m.a].p++; stats[m.b].p++;
+ if(m.sa>m.sb){stats[m.a].w++;stats[m.b].l++;stats[m.a].pts+=3;}
+ else if(m.sb>m.sa){stats[m.b].w++;stats[m.a].l++;stats[m.b].pts+=3;}
+ else{stats[m.a].d++;stats[m.b].d++;stats[m.a].pts++;stats[m.b].pts++;}
+}
+
+function undo(m){
+ stats[m.a].p--; stats[m.b].p--;
+ if(m.sa>m.sb){stats[m.a].w--;stats[m.b].l--;stats[m.a].pts-=3;}
+ else if(m.sb>m.sa){stats[m.b].w--;stats[m.a].l--;stats[m.b].pts-=3;}
+ else{stats[m.a].d--;stats[m.b].d--;stats[m.a].pts--;stats[m.b].pts--;}
+}
+
+function updateTable(){
+ let t=document.getElementById("table");
+ t.innerHTML="";
+ players.sort((a,b)=>stats[b].pts-stats[a].pts);
+ players.forEach((p,i)=>{
+  let tr=document.createElement("tr");
+  if(i===0) tr.className="rank1";
+  tr.innerHTML=`<td>${i+1}</td>
+    <td class="player-cell">
+      ${playerImgs[p]?<img class="player-img" src="${playerImgs[p]}"/>:""} <span>${p}</span>
+    </td>
+    <td>${stats[p].p}</td><td>${stats[p].w}</td><td>${stats[p].d}</td><td>${stats[p].l}</td><td>${stats[p].pts}</td>`;
+  t.appendChild(tr);
+ });
+}
+
+function downloadPNG(){
+ let element=document.getElementById("fixturesCard");
+ html2canvas(element, { scale:3, backgroundColor:null }).then(canvas=>{
+   canvas.toBlob(function(blob){
+     saveAs(blob,"fixtures.png");
+   });
+ });
+}
+
+function downloadSVG(){
+ let element=document.getElementById("fixturesCard");
+ let svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="${element.offsetWidth}" height="${element.offsetHeight}">
+ <foreignObject width="100%" height="100%">${new XMLSerializer().serializeToString(element)}</foreignObject>
+ </svg>`;
+ let blob = new Blob([svgContent], {type:"image/svg+xml"});
+ saveAs(blob,"fixtures.svg");
+}
+
+function newTournament(){
+ if(confirm("Start a new tournament? Current data will be cleared.")){
+   players=[];
+   stats={};
+   playerImgs={};
+   rounds=[];
+   document.getElementById("fixtures").innerHTML="";
+   document.getElementById("rounds").innerHTML="";
+   updateTable();
+ }
+}
+</script>
+</body>
+</html>
